@@ -1,0 +1,8 @@
+ORBIT 1.0 source derivative, 2026-10-18.
+Upstream: https://github.com/hugelton/Felucca
+Commit: a53ecf428c29c780108fd70a31b71a32a6b5c313
+Engine submodule included as source: https://github.com/hugelton/Felucca-Engines
+Commit: c46e0086f69bdc26df1cd144dca9e683cc4531dd
+Firmware changes: GPL-3.0-only. Retain upstream notices and dependency licenses.
+Not affiliated with Modern Sounds or endorsed by the upstream authors.
+No target firmware binary is included. See ORBIT-README.md for validation and limitations.

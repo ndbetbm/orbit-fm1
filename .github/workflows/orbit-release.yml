@@ -1,0 +1,85 @@
+name: Build ORBIT 1.0
+on:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Publish to GitHub Pages after a successful build'
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: orbit-release
+  cancel-in-progress: false
+jobs:
+  build:
+    permissions:
+      contents: read
+      pages: read
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang libtinfo5 libncurses5 xz-utils
+          python -m pip install Pillow==11.3.0 fonttools==4.59.0
+      - name: Fetch JieLi toolchain and SDK
+        run: |
+          sh tools/get_toolchain.sh "$RUNNER_TEMP/jieli"
+          git clone --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git "$RUNNER_TEMP/ac79"
+          echo "JIELI_TOOLCHAIN=$RUNNER_TEMP/jieli/toolchain" >> "$GITHUB_ENV"
+          echo "AC79_SDK=$RUNNER_TEMP/ac79" >> "$GITHUB_ENV"
+      - name: Compile hardware firmware 1.0
+        run: sh build.sh --release 1.0
+      - name: Install Emscripten 6.0.12
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install 6.0.12
+          "$RUNNER_TEMP/emsdk/emsdk" activate 6.0.12
+      - name: Compile and test browser instrument
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          EMU_PREVIEW=0 sh web/emu/build_orbit.sh
+          sh tests/run_orbit.sh
+          node web/test_web.mjs
+          node web/test_backup.mjs
+      - name: Assemble website with verified firmware package
+        run: python tools/make_orbit_site.py --package build/felucca-1.0.fwsc --out build/site
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ORBIT-1.0-firmware
+          path: build/release-1.0/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ORBIT-1.0-website
+          path: build/site/
+          include-hidden-files: true
+          if-no-files-found: error
+      - uses: actions/configure-pages@v5
+        if: inputs.deploy
+      - uses: actions/upload-pages-artifact@v3
+        if: inputs.deploy
+        with:
+          path: build/site
+  deploy:
+    if: inputs.deploy
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
